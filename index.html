@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MANIKANDAN — Image Upscaler with Progress and Download</title>
+  <style>
+    :root{--sky:#7ec8f5;--black:#0b0b0b;--btn-bg:var(--sky);--btn-ink:#04233b;}
+    body{margin:0;padding:30px;font-family:sans-serif;background:#eef7ff;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+    .container{background:#fff;border-radius:12px;box-shadow:0 0 15px rgba(0,0,0,0.1);padding:20px;max-width:800px;width:100%;}
+    h1{text-align:center;color:var(--black);}
+    .preview{margin:20px auto;text-align:center;background:#000;border-radius:10px;padding:10px;}
+    .preview img,.preview canvas{max-width:100%;border-radius:6px;}
+    button{padding:10px 16px;border:none;border-radius:8px;margin:5px;cursor:pointer;font-weight:bold;}
+    .primary{background:var(--btn-bg);color:var(--btn-ink);}
+    .ghost{background:transparent;border:1px solid #ccc;}
+    .progress-bar{width:100%;background:#ddd;border-radius:10px;overflow:hidden;height:15px;margin-top:10px;display:none;}
+    .progress-bar-fill{height:100%;width:0;background:var(--sky);transition:width 0.3s ease;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MANIKANDAN — Image Upscaler</h1>
+    <input type="file" id="file" accept="image/*" />
+    <select id="preset">
+      <option value="">-- Choose preset --</option>
+      <option value="4k">4K</option>
+      <option value="8k">8K</option>
+      <option value="75x">75×</option>
+      <option value="100x">100×</option>
+      <option value="200x">200×</option>
+      <option value="500x">500×</option>
+      <option value="1000x">1000×</option>
+    </select>
+    <div class="preview" id="previewWrap"><p style="color:#fff;opacity:0.7">No image uploaded</p></div>
+    <div class="progress-bar" id="progressBar"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div style="text-align:center;">
+      <button class="primary" id="previewBtn">Preview Upscale</button>
+      <button class="primary" id="downloadBtn" disabled>Download Upscaled Image</button>
+      <button class="ghost" id="resetBtn">Reset</button>
+    </div>
+    <p id="status" style="text-align:center;color:#333;">Waiting for image</p>
+  </div>
+
+  <script>
+    const fileEl=document.getElementById('file');
+    const previewWrap=document.getElementById('previewWrap');
+    const preset=document.getElementById('preset');
+    const previewBtn=document.getElementById('previewBtn');
+    const downloadBtn=document.getElementById('downloadBtn');
+    const resetBtn=document.getElementById('resetBtn');
+    const status=document.getElementById('status');
+    const progressBar=document.getElementById('progressBar');
+    const progressFill=document.getElementById('progressFill');
+
+    let originalImage=null;let lastCanvas=null;
+
+    function setStatus(msg){status.textContent=msg;}
+
+    function updateProgress(pct){
+      progressBar.style.display='block';
+      progressFill.style.width=pct+'%';
+    }
+
+    fileEl.addEventListener('change',e=>{
+      const file=e.target.files[0];
+      if(!file)return;
+      if(!file.type.startsWith('image/')){setStatus('Unsupported file type');return;}
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const img=new Image();
+        img.onload=()=>{
+          originalImage=img;
+          previewWrap.innerHTML='';
+          previewWrap.appendChild(img);
+          setStatus(`Loaded ${img.naturalWidth}×${img.naturalHeight}`);
+        };
+        img.onerror=()=>setStatus('Error decoding image. Try a different format (PNG, JPG, GIF).');
+        img.src=reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    resetBtn.addEventListener('click',()=>{
+      fileEl.value='';originalImage=null;lastCanvas=null;
+      previewWrap.innerHTML='<p style="color:#fff;opacity:0.7">No image uploaded</p>';
+      setStatus('Waiting for image');downloadBtn.disabled=true;
+      progressBar.style.display='none';progressFill.style.width='0%';
+    });
+
+    async function upscale(img, factor){
+      return new Promise((resolve)=>{
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.min(img.naturalWidth*factor,20000);
+        canvas.height=Math.min(img.naturalHeight*factor,20000);
+        const ctx=canvas.getContext('2d');
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality='high';
+        let steps=20; let i=0;
+        function drawStep(){
+          i++;
+          updateProgress((i/steps)*100);
+          if(i>=steps){ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas);}else setTimeout(drawStep,50);
+        }
+        drawStep();
+      });
+    }
+
+    previewBtn.addEventListener('click',async()=>{
+      if(!originalImage){alert('Upload an image first.');return;}
+      const v=preset.value;if(!v){alert('Select a preset.');return;}
+      let factor=1;
+      if(v==='4k'){factor=3840/originalImage.naturalWidth;}
+      else if(v==='8k'){factor=7680/originalImage.naturalWidth;}
+      else if(v.endsWith('x'))factor=parseFloat(v);
+      setStatus('Upscaling...');
+      updateProgress(0);
+      try{
+        const c=await upscale(originalImage,factor);
+        previewWrap.innerHTML='';
+        previewWrap.appendChild(c);
+        lastCanvas=c;downloadBtn.disabled=false;
+        updateProgress(100);
+        setTimeout(()=>progressBar.style.display='none',500);
+        setStatus(`Upscaled to ${c.width}×${c.height}`);
+      }catch(err){
+        console.error(err);
+        setStatus('Upscale failed. Possibly too large.');
+        progressBar.style.display='none';
+      }
+    });
+
+    downloadBtn.addEventListener('click',()=>{
+      if(!lastCanvas){alert('No upscaled image to download.');return;}
+      setStatus('Preparing download...');
+      lastCanvas.toBlob(blob=>{
+        if(!blob){setStatus('Failed to generate image.');return;}
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        a.download=`MANIKANDAN_upscaled_${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        setStatus('Upscaled image downloaded successfully.');
+      },'image/png',1.0);
+    });
+  </script>
+</body>
+</html>
