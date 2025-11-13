@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>MANIKANDAN — AI Image Editor & Upscaler</title>
   <style>
     :root{
@@ -13,30 +13,55 @@
       --bg-light:#e6f7ff;
     }
     body{
-      margin:0;padding:30px;font-family:'Segoe UI',sans-serif;background:var(--bg-light);
+      margin:0;padding:20px;font-family:'Segoe UI',sans-serif;background:var(--bg-light);
       display:flex;justify-content:center;align-items:center;min-height:100vh;color:var(--black);
     }
     .container{
       background:var(--black);border-radius:16px;box-shadow:0 0 20px rgba(0,0,0,0.3);
-      padding:25px;max-width:900px;width:100%;color:#fff;position:relative;
+      padding:20px;width:100%;max-width:900px;color:#fff;position:relative;box-sizing:border-box;
+      display:flex;flex-direction:column;align-items:center;
     }
     .logo{
-      position:absolute;top:15px;left:15px;width:80px;height:auto;border-radius:50%;
+      position:absolute;top:10px;left:10px;width:60px;height:auto;border-radius:50%;
     }
     h1{
-      text-align:center;color:var(--sky);margin-top:0;padding-top:20px;
+      text-align:center;color:var(--sky);margin-top:60px;font-size:1.6rem;
     }
     .preview{
-      margin:20px auto;text-align:center;background:#000;border-radius:10px;padding:10px;
+      margin:20px auto;text-align:center;background:#000;border-radius:10px;padding:10px;width:100%;box-sizing:border-box;
     }
     .preview img,.preview canvas{max-width:100%;border-radius:8px;}
     button{
-      padding:12px 18px;border:none;border-radius:10px;margin:5px;cursor:pointer;font-weight:bold;
-      background:var(--btn-bg);color:var(--btn-ink);transition:all 0.3s ease;
+      padding:12px 16px;border:none;border-radius:10px;margin:5px;cursor:pointer;font-weight:bold;
+      background:var(--btn-bg);color:var(--btn-ink);transition:all 0.3s ease;width:100%;max-width:200px;
     }
-    button:hover{opacity:0.9;transform:scale(1.05);}
+    button:hover{opacity:0.9;transform:scale(1.05);}  
+    
+    /* Glow animations */
+    @keyframes glowRed {
+      0% {box-shadow:0 0 5px red,0 0 10px red;}
+      50% {box-shadow:0 0 20px red,0 0 40px red;}
+      100% {box-shadow:0 0 5px red,0 0 10px red;}
+    }
+    @keyframes glowGreen {
+      0% {box-shadow:0 0 5px lime,0 0 10px lime;}
+      50% {box-shadow:0 0 20px lime,0 0 40px lime;}
+      100% {box-shadow:0 0 5px lime,0 0 10px lime;}
+    }
+
+    #resetBtn{
+      background:red;
+      color:#fff;
+      animation:glowRed 2s infinite alternate;
+    }
+    #downloadBtn{
+      background:green;
+      color:#fff;
+      animation:glowGreen 2s infinite alternate;
+    }
+
     select,input[type="file"]{
-      background:#111;color:#fff;border:1px solid var(--sky);border-radius:8px;padding:8px;margin-top:10px;
+      background:#111;color:#fff;border:1px solid var(--sky);border-radius:8px;padding:8px;margin-top:10px;width:100%;max-width:300px;
     }
     .ghost{
       background:transparent;border:1px solid var(--sky);color:var(--sky);
@@ -44,7 +69,23 @@
     .ghost:hover{background:var(--sky);color:#fff;}
     .progress-bar{width:100%;background:#222;border-radius:10px;overflow:hidden;height:15px;margin-top:10px;display:none;}
     .progress-bar-fill{height:100%;width:0;background:var(--sky);transition:width 0.3s ease;}
-    .btn-group{text-align:center;margin-top:15px;}
+    .btn-group{
+      display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:15px;width:100%;
+    }
+    @media (max-width:768px){
+      body{padding:10px;}
+      .container{padding:15px;}
+      h1{font-size:1.3rem;margin-top:70px;}
+      button{font-size:0.9rem;padding:10px 14px;max-width:150px;}
+      .logo{width:50px;}
+    }
+    @media (max-width:480px){
+      .container{padding:10px;border-radius:10px;}
+      h1{font-size:1.1rem;margin-top:70px;}
+      button{max-width:100%;}
+      select,input[type="file"]{max-width:100%;}
+      .logo{width:40px;}
+    }
   </style>
 </head>
 <body>
@@ -53,13 +94,123 @@
     <h1>MANIKANDAN — AI Image Editor</h1>
     <input type="file" id="file" accept="image/*" />
     <select id="preset">
-      <option value="">-- Choose preset --</option>
+      <option value="">Choose Preset</option>
       <option value="2k">2K</option>
       <option value="4k">4K</option>
       <option value="8k">8K</option>
       <option value="12k">12K</option>
       <option value="16k">16K</option>
     </select>
+
+    <div class="preview" id="previewWrap"><p style="color:#fff;opacity:0.7">No image uploaded</p></div>
+    <div class="progress-bar" id="progressBar"><div class="progress-bar-fill" id="progressFill"></div></div>
+
+    <div class="btn-group">
+      <button id="previewBtn">Preview Upscale</button>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>MANIKANDAN — AI Image Editor & Upscaler</title>
+  <style>
+    :root{
+      --sky:#00bfff;
+      --black:#000000;
+      --btn-bg:var(--sky);
+      --btn-ink:#ffffff;
+      --bg-light:#e6f7ff;
+    }
+    body{
+      margin:0;padding:20px;font-family:'Segoe UI',sans-serif;background:var(--bg-light);
+      display:flex;justify-content:center;align-items:center;min-height:100vh;color:var(--black);
+    }
+    .container{
+      background:var(--black);border-radius:16px;box-shadow:0 0 20px rgba(0,0,0,0.3);
+      padding:20px;width:100%;max-width:900px;color:#fff;position:relative;box-sizing:border-box;
+      display:flex;flex-direction:column;align-items:center;
+    }
+    .logo{
+      position:absolute;top:10px;left:10px;width:60px;height:auto;border-radius:50%;
+    }
+    h1{
+      text-align:center;color:var(--sky);margin-top:60px;font-size:1.6rem;
+    }
+    .preview{
+      margin:20px auto;text-align:center;background:#000;border-radius:10px;padding:10px;width:100%;box-sizing:border-box;
+    }
+    .preview img,.preview canvas{max-width:100%;border-radius:8px;}
+    button{
+      padding:12px 16px;border:none;border-radius:10px;margin:5px;cursor:pointer;font-weight:bold;
+      background:var(--btn-bg);color:var(--btn-ink);transition:all 0.3s ease;width:100%;max-width:200px;
+    }
+    button:hover{opacity:0.9;transform:scale(1.05);}  
+    
+    /* Glow animations */
+    @keyframes glowRed {
+      0% {box-shadow:0 0 5px red,0 0 10px red;}
+      50% {box-shadow:0 0 20px red,0 0 40px red;}
+      100% {box-shadow:0 0 5px red,0 0 10px red;}
+    }
+    @keyframes glowGreen {
+      0% {box-shadow:0 0 5px lime,0 0 10px lime;}
+      50% {box-shadow:0 0 20px lime,0 0 40px lime;}
+      100% {box-shadow:0 0 5px lime,0 0 10px lime;}
+    }
+
+    #resetBtn{
+      background:red;
+      color:#fff;
+      animation:glowRed 2s infinite alternate;
+    }
+    #downloadBtn{
+      background:green;
+      color:#fff;
+      animation:glowGreen 2s infinite alternate;
+    }
+
+    select,input[type="file"]{
+      background:#111;color:#fff;border:1px solid var(--sky);border-radius:8px;padding:8px;margin-top:10px;width:100%;max-width:300px;
+    }
+    .ghost{
+      background:transparent;border:1px solid var(--sky);color:var(--sky);
+    }
+    .ghost:hover{background:var(--sky);color:#fff;}
+    .progress-bar{width:100%;background:#222;border-radius:10px;overflow:hidden;height:15px;margin-top:10px;display:none;}
+    .progress-bar-fill{height:100%;width:0;background:var(--sky);transition:width 0.3s ease;}
+    .btn-group{
+      display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:15px;width:100%;
+    }
+    @media (max-width:768px){
+      body{padding:10px;}
+      .container{padding:15px;}
+      h1{font-size:1.3rem;margin-top:70px;}
+      button{font-size:0.9rem;padding:10px 14px;max-width:150px;}
+      .logo{width:50px;}
+    }
+    @media (max-width:480px){
+      .container{padding:10px;border-radius:10px;}
+      h1{font-size:1.1rem;margin-top:70px;}
+      button{max-width:100%;}
+      select,input[type="file"]{max-width:100%;}
+      .logo{width:40px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="IMG-20251028-WA0018(1).jpg" alt="Logo" class="logo">
+    <h1>MANIKANDAN — AI Image Editor</h1>
+    <input type="file" id="file" accept="image/*" />
+    <select id="preset">
+      <option value="">Choose Preset</option>
+      <option value="2k">2K</option>
+      <option value="4k">4K</option>
+      <option value="8k">8K</option>
+      <option value="12k">12K</option>
+      <option value="16k">16K</option>
+    </select>
+
     <div class="preview" id="previewWrap"><p style="color:#fff;opacity:0.7">No image uploaded</p></div>
     <div class="progress-bar" id="progressBar"><div class="progress-bar-fill" id="progressFill"></div></div>
 
@@ -78,32 +229,8 @@
 
     <p id="status" style="text-align:center;color:var(--sky);">Waiting for image</p>
   </div>
-
-  <script>
-    const fileEl=document.getElementById('file');
-    const previewWrap=document.getElementById('previewWrap');
-    const preset=document.getElementById('preset');
-    const previewBtn=document.getElementById('previewBtn');
-    const downloadBtn=document.getElementById('downloadBtn');
-    const resetBtn=document.getElementById('resetBtn');
-    const enhanceBtn=document.getElementById('enhanceBtn');
-    const expandBtn=document.getElementById('expandBtn');
-    const removeBgBtn=document.getElementById('removeBgBtn');
-    const removeBtn=document.getElementById('removeBtn');
-    const status=document.getElementById('status');
-    const progressBar=document.getElementById('progressBar');
-    const progressFill=document.getElementById('progressFill');
-
-    let originalImage=null;let lastCanvas=null;
-
-    function setStatus(msg){status.textContent=msg;}
-
-    function updateProgress(pct){
-      progressBar.style.display='block';
-      progressFill.style.width=pct+'%';
-    }
-
-    // Load Image
+</body>
+</html>
     fileEl.addEventListener('change',e=>{
       const file=e.target.files[0];
       if(!file)return;
