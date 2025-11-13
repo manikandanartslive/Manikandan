@@ -215,6 +215,187 @@
   </script>
 </body>
 </html>
+    button:hover{opacity:0.9;transform:scale(1.05);}
+    select,input[type="file"]{
+      background:#111;color:#fff;border:1px solid var(--sky);border-radius:8px;padding:8px;margin-top:10px;
+    }
+    .ghost{
+      background:transparent;border:1px solid var(--sky);color:var(--sky);
+    }
+    .ghost:hover{background:var(--sky);color:#fff;}
+    .progress-bar{width:100%;background:#222;border-radius:10px;overflow:hidden;height:15px;margin-top:10px;display:none;}
+    .progress-bar-fill{height:100%;width:0;background:var(--sky);transition:width 0.3s ease;}
+    .btn-group{text-align:center;margin-top:15px;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="IMG-20251028.jpg" alt="Logo" class="logo">
+    <h1>MANIKANDAN — AI Image Editor</h1>
+    <input type="file" id="file" accept="image/*" />
+    <select id="preset">
+      <option value="">-- Choose preset --</option>
+      <option value="2k">2K</option>
+      <option value="4k">4K</option>
+      <option value="8k">8K</option>
+      <option value="12k">12K</option>
+      <option value="16k">16K</option>
+    </select>
+    <div class="preview" id="previewWrap"><p style="color:#fff;opacity:0.7">No image uploaded</p></div>
+    <div class="progress-bar" id="progressBar"><div class="progress-bar-fill" id="progressFill"></div></div>
+
+    <div class="btn-group">
+      <button id="previewBtn">Preview Upscale</button>
+      <button id="downloadBtn" disabled>Download Upscaled Image</button>
+      <button class="ghost" id="resetBtn">Reset</button>
+    </div>
+
+    <div class="btn-group">
+      <button id="enhanceBtn">AI Enhance</button>
+      <button id="expandBtn">AI Expand</button>
+      <button id="removeBgBtn">Remove Background</button>
+      <button class="ghost" id="removeBtn">Remove</button>
+    </div>
+
+    <p id="status" style="text-align:center;color:var(--sky);">Waiting for image</p>
+  </div>
+
+  <script>
+    const fileEl=document.getElementById('file');
+    const previewWrap=document.getElementById('previewWrap');
+    const preset=document.getElementById('preset');
+    const previewBtn=document.getElementById('previewBtn');
+    const downloadBtn=document.getElementById('downloadBtn');
+    const resetBtn=document.getElementById('resetBtn');
+    const enhanceBtn=document.getElementById('enhanceBtn');
+    const expandBtn=document.getElementById('expandBtn');
+    const removeBgBtn=document.getElementById('removeBgBtn');
+    const removeBtn=document.getElementById('removeBtn');
+    const status=document.getElementById('status');
+    const progressBar=document.getElementById('progressBar');
+    const progressFill=document.getElementById('progressFill');
+
+    let originalImage=null;let lastCanvas=null;
+
+    function setStatus(msg){status.textContent=msg;}
+
+    function updateProgress(pct){
+      progressBar.style.display='block';
+      progressFill.style.width=pct+'%';
+    }
+
+    // Load Image
+    fileEl.addEventListener('change',e=>{
+      const file=e.target.files[0];
+      if(!file)return;
+      if(!file.type.startsWith('image/')){setStatus('Unsupported file type');return;}
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const img=new Image();
+        img.onload=()=>{
+          originalImage=img;
+          previewWrap.innerHTML='';
+          previewWrap.appendChild(img);
+          setStatus(`Loaded ${img.naturalWidth}×${img.naturalHeight}`);
+        };
+        img.onerror=()=>setStatus('Error decoding image. Try a different format (PNG, JPG, GIF).');
+        img.src=reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    resetBtn.addEventListener('click',()=>{
+      fileEl.value='';originalImage=null;lastCanvas=null;
+      previewWrap.innerHTML='<p style="color:#fff;opacity:0.7">No image uploaded</p>';
+      setStatus('Waiting for image');downloadBtn.disabled=true;
+      progressBar.style.display='none';progressFill.style.width='0%';
+    });
+
+    async function upscale(img, factor){
+      return new Promise((resolve)=>{
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.min(img.naturalWidth*factor,20000);
+        canvas.height=Math.min(img.naturalHeight*factor,20000);
+        const ctx=canvas.getContext('2d');
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality='high';
+        let steps=20; let i=0;
+        function drawStep(){
+          i++;
+          updateProgress((i/steps)*100);
+          if(i>=steps){ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas);}else setTimeout(drawStep,50);
+        }
+        drawStep();
+      });
+    }
+
+    previewBtn.addEventListener('click',async()=>{
+      if(!originalImage){alert('Upload an image first.');return;}
+      const v=preset.value;if(!v){alert('Select a preset.');return;}
+      let factor=1;
+      if(v==='2k'){factor=1920/originalImage.naturalWidth;}
+      else if(v==='4k'){factor=3840/originalImage.naturalWidth;}
+      else if(v==='8k'){factor=7680/originalImage.naturalWidth;}
+      else if(v==='12k'){factor=11520/originalImage.naturalWidth;}
+      else if(v==='16k'){factor=15360/originalImage.naturalWidth;}
+      setStatus('Upscaling...');
+      updateProgress(0);
+      try{
+        const c=await upscale(originalImage,factor);
+        previewWrap.innerHTML='';
+        previewWrap.appendChild(c);
+        lastCanvas=c;downloadBtn.disabled=false;
+        updateProgress(100);
+        setTimeout(()=>progressBar.style.display='none',500);
+        setStatus(`Upscaled to ${c.width}×${c.height}`);
+      }catch(err){
+        console.error(err);
+        setStatus('Upscale failed. Possibly too large.');
+        progressBar.style.display='none';
+      }
+    });
+
+    downloadBtn.addEventListener('click',()=>{
+      if(!lastCanvas){alert('No upscaled image to download.');return;}
+      setStatus('Preparing download...');
+      lastCanvas.toBlob(blob=>{
+        if(!blob){setStatus('Failed to generate image.');return;}
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        a.download=`MANIKANDAN_upscaled_${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        setStatus('Upscaled image downloaded successfully.');
+      },'image/png',1.0);
+    });
+
+    // Placeholder AI Functions for future integration
+    function simulateAIProcess(action){
+      if(!originalImage){alert('Upload an image first.');return;}
+      setStatus(`${action} in progress...`);
+      updateProgress(0);
+      let p=0;const interval=setInterval(()=>{
+        p+=10;updateProgress(p);
+        if(p>=100){clearInterval(interval);
+          progressBar.style.display='none';
+          setStatus(`${action} completed successfully (placeholder).`);
+        }
+      },200);
+    }
+
+    enhanceBtn.addEventListener('click',()=>simulateAIProcess('AI Enhance'));
+    expandBtn.addEventListener('click',()=>simulateAIProcess('AI Expand'));
+    removeBgBtn.addEventListener('click',()=>simulateAIProcess('Remove Background'));
+    removeBtn.addEventListener('click',()=>{
+      fileEl.value='';originalImage=null;lastCanvas=null;
+      previewWrap.innerHTML='<p style="color:#fff;opacity:0.7">Image removed</p>';
+      setStatus('Image removed.');downloadBtn.disabled=true;
+    });
+  </script>
+</body>
+</html>
 
     fileEl.addEventListener('change',e=>{
       const file=e.target.files[0];
